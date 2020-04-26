@@ -37,6 +37,7 @@ namespace StockAnalyzer.Windows
             Search.Content = "Cancel";
             #endregion
 
+            #region Cancelation
             if (cancellationTokenSource != null)
             {
                 cancellationTokenSource.Cancel();
@@ -49,12 +50,34 @@ namespace StockAnalyzer.Windows
             cancellationTokenSource.Token.Register(() => {
                 Notes.Text = "Cancelation Requested !";
             });
+            #endregion
+
 
             try
             {
+                var tickers = Ticker.Text.Split(',',' ');
                 var service = new StockService();
-                var data = await service.GetStockPricesFor(Ticker.Text, cancellationTokenSource.Token);
-                Stocks.ItemsSource = data;
+
+
+                var tickerLoadingTasks = new List<Task<IEnumerable<StockPrice>>>();
+                foreach (var ticker in tickers)
+                {
+                    var loadTask = service.GetStockPricesFor(Ticker.Text, cancellationTokenSource.Token);
+                    tickerLoadingTasks.Add(loadTask);
+                }
+
+                var timeoutTask = Task.Delay(2000);
+                var allStocksLoadingTask = Task.WhenAll(tickerLoadingTasks);
+                var completedTask = await Task.WhenAny(timeoutTask, allStocksLoadingTask);
+                
+                if(completedTask == timeoutTask)
+                {
+                    cancellationTokenSource.Cancel();
+                    cancellationTokenSource = null;
+                    throw new Exception("Timeout");
+                }
+
+                Stocks.ItemsSource = allStocksLoadingTask.Result.SelectMany(stocks => stocks);
             }
             catch (Exception ex)
             {
