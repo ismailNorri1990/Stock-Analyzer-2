@@ -37,52 +37,58 @@ namespace StockAnalyzer.Windows
             Search.Content = "Cancel";
             #endregion
 
-            //The Task is excecuted in separated thread
-
-            var LoadLinesTask = Task.Run(() =>
-           {
-               var lines = File.ReadAllLines(@"StockPrices_Small.csv");
-               return lines;
-           });
-
-            var ProcessStocksTasks = LoadLinesTask.ContinueWith(t =>
+            if (cancellationTokenSource != null)
             {
+                cancellationTokenSource.Cancel();
+                cancellationTokenSource = null;
+                return;
+            }
 
-                var lines = t.Result;
+            cancellationTokenSource = new CancellationTokenSource();
 
-                var data = new List<StockPrice>();
+            cancellationTokenSource.Token.Register(() => {
+                Notes.Text = "Cancelation Requested !";
+            });
+            var loadLinesTask = SearchForStocks(cancellationTokenSource.Token);
 
-                foreach (var line in lines.Skip(1))
-                {
-                    var segments = line.Split(',');
+            var ProcessStocksTasks = loadLinesTask.ContinueWith(t =>
+             {
 
-                    for (var i = 0; i < segments.Length; i++) segments[i] = segments[i].Trim('\'', '"');
-                    var price = new StockPrice
-                    {
-                        Ticker = segments[0],
-                        TradeDate = DateTime.ParseExact(segments[1], "M/d/yyyy h:mm:ss tt", CultureInfo.InvariantCulture),
-                        Volume = Convert.ToInt32(segments[6], CultureInfo.InvariantCulture),
-                        Change = Convert.ToDecimal(segments[7], CultureInfo.InvariantCulture),
-                        ChangePercent = Convert.ToDecimal(segments[8], CultureInfo.InvariantCulture),
-                    };
-                    data.Add(price);
-                }
+                 var lines = t.Result;
+
+                 var data = new List<StockPrice>();
+
+                 foreach (var line in lines.Skip(1))
+                 {
+                     var segments = line.Split(',');
+
+                     for (var i = 0; i < segments.Length; i++) segments[i] = segments[i].Trim('\'', '"');
+                     var price = new StockPrice
+                     {
+                         Ticker = segments[0],
+                         TradeDate = DateTime.ParseExact(segments[1], "M/d/yyyy h:mm:ss tt", CultureInfo.InvariantCulture),
+                         Volume = Convert.ToInt32(segments[6], CultureInfo.InvariantCulture),
+                         Change = Convert.ToDecimal(segments[7], CultureInfo.InvariantCulture),
+                         ChangePercent = Convert.ToDecimal(segments[8], CultureInfo.InvariantCulture),
+                     };
+                     data.Add(price);
+                 }
 
                 //Render the result to the UI thread
                 Dispatcher.Invoke(() => { Stocks.ItemsSource = data.Where(price => price.Ticker == Ticker.Text); });
 
-            },TaskContinuationOptions.OnlyOnRanToCompletion);
+             },cancellationTokenSource.Token , TaskContinuationOptions.OnlyOnRanToCompletion,TaskScheduler.Current);
 
-            LoadLinesTask.ContinueWith(t=> {
+            loadLinesTask.ContinueWith(t =>
+            {
                 Dispatcher.Invoke(() =>
                 {
                     Notes.Text += t.Exception.InnerException.Message;
                 });
-            },TaskContinuationOptions.OnlyOnFaulted);
-            
-            
+            }, TaskContinuationOptions.OnlyOnFaulted);
 
-            ProcessStocksTasks.ContinueWith(_ => {
+            ProcessStocksTasks.ContinueWith(_ =>
+            {
                 Dispatcher.Invoke(() =>
             {
                 #region After stock data is loaded
@@ -92,9 +98,6 @@ namespace StockAnalyzer.Windows
                 #endregion
             });
             });
-
-
-
 
             cancellationTokenSource = null;
         }
