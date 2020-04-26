@@ -71,9 +71,17 @@ namespace StockAnalyzer.Windows
                 //Render the result to the UI thread
                 Dispatcher.Invoke(() => { Stocks.ItemsSource = data.Where(price => price.Ticker == Ticker.Text); });
 
-            });
+            },TaskContinuationOptions.OnlyOnRanToCompletion);
+
+            LoadLinesTask.ContinueWith(t=> {
+                Dispatcher.Invoke(() =>
+                {
+                    Notes.Text += t.Exception.InnerException.Message;
+                });
+            },TaskContinuationOptions.OnlyOnFaulted);
             
             
+
             ProcessStocksTasks.ContinueWith(_ => {
                 Dispatcher.Invoke(() =>
             {
