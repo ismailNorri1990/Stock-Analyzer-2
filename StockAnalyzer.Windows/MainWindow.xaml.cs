@@ -26,7 +26,7 @@ namespace StockAnalyzer.Windows
 
         CancellationTokenSource cancellationTokenSource = null;
 
-        private void Search_Click(object sender, RoutedEventArgs e)
+        private async void Search_Click(object sender, RoutedEventArgs e)
         {
             #region Before loading stock data
             var watch = new Stopwatch();
@@ -49,7 +49,21 @@ namespace StockAnalyzer.Windows
             cancellationTokenSource.Token.Register(() => {
                 Notes.Text = "Cancelation Requested !";
             });
-            var loadLinesTask = SearchForStocks(cancellationTokenSource.Token);
+
+            try
+            {
+                var service = new StockService();
+                var data = await service.GetStockPricesFor(Ticker.Text, cancellationTokenSource.Token);
+                Stocks.ItemsSource = data;
+            }
+            catch (Exception ex)
+            {
+                Notes.Text += ex.Message + Environment.NewLine;
+            }
+            
+            
+            
+            /*var loadLinesTask = SearchForStocks(cancellationTokenSource.Token);
 
             var ProcessStocksTasks = loadLinesTask.ContinueWith(t =>
              {
@@ -85,19 +99,14 @@ namespace StockAnalyzer.Windows
                 {
                     Notes.Text += t.Exception.InnerException.Message;
                 });
-            }, TaskContinuationOptions.OnlyOnFaulted);
+            }, TaskContinuationOptions.OnlyOnFaulted);*/
 
-            ProcessStocksTasks.ContinueWith(_ =>
-            {
-                Dispatcher.Invoke(() =>
-            {
+    
                 #region After stock data is loaded
                 StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
                 StockProgress.Visibility = Visibility.Hidden;
                 Search.Content = "Search";
                 #endregion
-            });
-            });
 
             cancellationTokenSource = null;
         }
