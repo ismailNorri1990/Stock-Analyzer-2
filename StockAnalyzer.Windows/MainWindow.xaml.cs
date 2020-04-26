@@ -26,7 +26,7 @@ namespace StockAnalyzer.Windows
 
         CancellationTokenSource cancellationTokenSource = null;
 
-        private async void Search_Click(object sender, RoutedEventArgs e)
+        private void Search_Click(object sender, RoutedEventArgs e)
         {
             #region Before loading stock data
             var watch = new Stopwatch();
@@ -39,9 +39,16 @@ namespace StockAnalyzer.Windows
 
             //The Task is excecuted in separated thread
 
-            await Task.Run(() =>
+            var LoadLinesTask = Task.Run(() =>
+           {
+               var lines = File.ReadAllLines(@"StockPrices_Small.csv");
+               return lines;
+           });
+
+            var ProcessStocksTasks = LoadLinesTask.ContinueWith(t =>
             {
-                var lines = File.ReadAllLines(@"StockPrices_Small.csv");
+
+                var lines = t.Result;
 
                 var data = new List<StockPrice>();
 
@@ -63,15 +70,23 @@ namespace StockAnalyzer.Windows
 
                 //Render the result to the UI thread
                 Dispatcher.Invoke(() => { Stocks.ItemsSource = data.Where(price => price.Ticker == Ticker.Text); });
-               
+
+            });
+            
+            
+            ProcessStocksTasks.ContinueWith(_ => {
+                Dispatcher.Invoke(() =>
+            {
+                #region After stock data is loaded
+                StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
+                StockProgress.Visibility = Visibility.Hidden;
+                Search.Content = "Search";
+                #endregion
+            });
             });
 
 
-            #region After stock data is loaded
-            StocksStatus.Text = $"Loaded stocks for {Ticker.Text} in {watch.ElapsedMilliseconds}ms";
-            StockProgress.Visibility = Visibility.Hidden;
-            Search.Content = "Search";
-            #endregion
+
 
             cancellationTokenSource = null;
         }
